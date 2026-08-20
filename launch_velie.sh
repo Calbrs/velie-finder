@@ -26,9 +26,10 @@ export OCI_CLI_REGION="${OCI_CLI_REGION:-af-johannesburg-1}"
 SSH_KEY_FILE=/tmp/velie_ssh_key.pub
 printf '%s\n' "${OCI_SSH_PUBLIC_KEY:?OCI_SSH_PUBLIC_KEY required}" > "$SSH_KEY_FILE"
 
-# API signing private key (content, from env secret) -> temp file for CLI.
+# API signing private key (single-line with \n escapes, from env secret) ->
+# decoded into a temp PEM file for the CLI.
 API_KEY_FILE=/tmp/velie_api_key.pem
-printf '%s\n' "${OCI_API_KEY:?OCI_API_KEY required}" > "$API_KEY_FILE"
+printf '%b\n' "${OCI_API_KEY:?OCI_API_KEY required}" > "$API_KEY_FILE"
 chmod 600 "$API_KEY_FILE"
 export OCI_CLI_KEY_FILE="$API_KEY_FILE"
 
