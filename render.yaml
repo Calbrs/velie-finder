@@ -1,10 +1,12 @@
-# Render blueprint: runs the OCI ARM launcher as a background worker 24/7.
+# Render blueprint: runs the OCI ARM launcher as a web service 24/7.
+# A cron job pings /health to keep the free web service awake.
 services:
-  - type: worker
+  - type: web
     name: velie-finder
     runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
     envVars:
       - key: OCI_COMPARTMENT_ID
         sync: false

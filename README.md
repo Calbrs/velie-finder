@@ -15,8 +15,10 @@ delete instances, so this loop polls the OCI API until a slot frees up.
 
 - `launch_velie.sh` – Linux/bash launcher, runs on Render 24/7 (all secrets via env).
 - `launch_velie.ps1` – Windows/PowerShell version, for local debugging only.
-- `Dockerfile` – installs the OCI CLI; entrypoint is `launch_velie.sh`.
-- `render.yaml` – Render blueprint (background worker, free plan).
+- `health.py` – tiny HTTP server (`/health`) that keeps the free web service active.
+- `entrypoint.sh` – starts `health.py` in the background, then the launcher.
+- `Dockerfile` – installs the OCI CLI; entrypoint is `entrypoint.sh`.
+- `render.yaml` – Render blueprint (free web service + `/health`).
 
 ## Deploy on Render
 
@@ -37,8 +39,13 @@ delete instances, so this loop polls the OCI API until a slot frees up.
 
    The private API key must go in Render as a **secret** (never commit it).
 
-4. Deploy. The worker logs each attempt; when a slot opens it prints the
-   instance OCID and stays alive.
+4. Deploy. The service serves `GET /health` (→ `{"status":"ok"}`) and runs the
+   launcher loop 24/7; when a slot opens it prints the instance OCID.
+
+5. **Keep the free web service awake**: Render free web services sleep after
+   ~15 min of inactivity. Point a cron job at `GET https://<your-service>.onrender.com/health`
+   every few minutes so the launcher keeps running. (Health pings also satisfy
+   Render's built-in health check.)
 
 ## Log messages (Swahili)
 

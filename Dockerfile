@@ -1,5 +1,6 @@
 # Render-ready Docker image for the OCI ARM auto-launcher.
-# Runs the retry loop 24/7 from a Render background worker.
+# Runs as a web service: a tiny /health server (kept warm by cron pings) plus
+# the 24/7 retry loop.
 FROM python:3.12-slim
 
 # OCI CLI needs git + openssh-client for ssh-related commands.
@@ -10,6 +11,9 @@ RUN apt-get update \
 
 WORKDIR /app
 COPY launch_velie.sh /app/launch_velie.sh
-RUN chmod +x /app/launch_velie.sh
+COPY health.py /app/health.py
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/launch_velie.sh /app/entrypoint.sh
 
-CMD ["/app/launch_velie.sh"]
+EXPOSE 10000
+CMD ["/app/entrypoint.sh"]
