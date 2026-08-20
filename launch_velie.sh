@@ -41,7 +41,7 @@ log() { echo "[$(date -u '+%H:%M:%S')] $*"; }
 
 # Guard against creating duplicate instances across restarts.
 instance_running() {
-  oci compute instance list \
+  timeout 60 oci compute instance list \
     --compartment-id "$COMPARTMENT_ID" \
     --display-name "$INSTANCE_NAME" \
     --query 'data[?"lifecycle-state"==`RUNNING` || "lifecycle-state"==`PROVISIONING` || "lifecycle-state"==`STARTING`]' \
@@ -61,7 +61,7 @@ while true; do
 
   log "[$timestamp] Inajaribu kutengeneza ARM A1.Flex (${OCPUS} OCPU, ${MEMORY_GB}GB) - jaribio #$attempt"
 
-  response=$(oci compute instance launch \
+  response=$(timeout 120 oci compute instance launch \
     --compartment-id "$COMPARTMENT_ID" \
     --availability-domain "$AVAILABILITY_DOMAIN" \
     --display-name "$INSTANCE_NAME" \
@@ -78,6 +78,9 @@ while true; do
     echo "$response"
     # Keep the worker alive + healthy; instance exists so just wait.
     while true; do sleep 3600; done
+  elif [ "$rc" -eq 124 ]; then
+    log "[$timestamp] Muongo wa API ulichukua muda mrefu (>120s) - jaribio #$attempt. Inajaribu tena..."
+    sleep $((15 + RANDOM % 10))
   elif printf '%s' "$response" | grep -qiE 'capacity|InternalError'; then
     log "[$timestamp] Out of capacity (jaribio #$attempt). Inajaribu tena..."
     sleep $((30 + RANDOM % 10))
