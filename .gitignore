@@ -1,0 +1,6 @@
+# Secrets / local noise
+*.pem
+*.key
+*.pub
+.oci/
+.env

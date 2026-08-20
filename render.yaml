@@ -1,0 +1,34 @@
+# Render blueprint: runs the OCI ARM launcher as a background worker 24/7.
+services:
+  - type: worker
+    name: velie-finder
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: OCI_COMPARTMENT_ID
+        sync: false
+      - key: OCI_SUBNET_ID
+        sync: false
+      - key: OCI_IMAGE_ID
+        sync: false
+      - key: OCI_AD
+        value: PNQu:AF-JOHANNESBURG-1-AD-1
+      - key: OCI_INSTANCE_NAME
+        value: Velie
+      - key: OCI_OCPUS
+        value: "1"
+      - key: OCI_MEMORY_GB
+        value: "4"
+      - key: OCI_CLI_TENANCY
+        sync: false
+      - key: OCI_CLI_USER
+        sync: false
+      - key: OCI_CLI_FINGERPRINT
+        sync: false
+      - key: OCI_CLI_REGION
+        value: af-johannesburg-1
+      - key: OCI_SSH_PUBLIC_KEY
+        sync: false
+      - key: OCI_API_KEY
+        sync: false
