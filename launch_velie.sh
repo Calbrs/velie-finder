@@ -4,9 +4,6 @@
 # ==========================================
 set -uo pipefail
 
-# Force line-buffered output so Render sees logs immediately.
-exec 1> >(stdbuf -oL cat) 2>&1
-
 # ---- Config from env -------------------------------------------------------
 COMPARTMENT_ID="${OCI_COMPARTMENT_ID:?OCI_COMPARTMENT_ID required}"
 SUBNET_ID="${OCI_SUBNET_ID:?OCI_SUBNET_ID required}"
