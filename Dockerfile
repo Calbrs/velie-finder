@@ -5,7 +5,7 @@ FROM python:3.12-slim
 
 # OCI CLI needs git + openssh-client for ssh-related commands.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends git openssh-client \
+  && apt-get install -y --no-install-recommends git openssh-client coreutils \
   && rm -rf /var/lib/apt/lists/* \
   && pip install --no-cache-dir oci-cli
 
