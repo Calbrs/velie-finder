@@ -35,23 +35,30 @@ printf '{"ocpus":%s,"memory_in_gbs":%s}\n' "$OCPUS" "$MEMORY_GB" > "$SHAPE_CONFI
 
 log() { echo "[$(date -u '+%H:%M:%S')] $*"; }
 
-# Verify timeout command is available (belt-and-suspenders with Dockerfile).
-if ! command -v timeout >/dev/null 2>&1; then
-  log "FATAL: 'timeout' command not found - coreutils may not be installed."
-  exit 1
-fi
-
-log "=== SCRIPT STARTED (attempt loop) ==="
+log "=== SCRIPT STARTED ==="
 log "Compartment: $COMPARTMENT_ID"
 log "AD: $AVAILABILITY_DOMAIN | Shape: VM.Standard.A1.Flex (${OCPUS}O/${MEMORY_GB}G)"
 
 # Guard: detect existing RUNNING/PROVISIONING instance across restarts.
 instance_running() {
-  timeout --kill-after=10 60 oci compute instance list \
+  oci compute instance list \
     --compartment-id "$COMPARTMENT_ID" \
     --display-name "$INSTANCE_NAME" \
     --query 'data[?"lifecycle-state"==`RUNNING` || "lifecycle-state"==`PROVISIONING` || "lifecycle-state"==`STARTING`]' \
     --raw-output 2>/dev/null | grep -q 'oci1\.instance' || return 1
+}
+
+launch_oci() {
+  oci compute instance launch \
+    --compartment-id "$COMPARTMENT_ID" \
+    --availability-domain "$AVAILABILITY_DOMAIN" \
+    --display-name "$INSTANCE_NAME" \
+    --image-id "$IMAGE_ID" \
+    --shape "VM.Standard.A1.Flex" \
+    --shape-config "file://$SHAPE_CONFIG" \
+    --subnet-id "$SUBNET_ID" \
+    --assign-public-ip true \
+    --ssh-authorized-keys-file "$SSH_KEY_FILE" 2>&1
 }
 
 attempt=0
@@ -69,26 +76,30 @@ while true; do
 
   log "[$timestamp] Launching OCI ARM A1.Flex (${OCPUS}OC/${MEMORY_GB}GB) - jaribio #$attempt"
 
-  response=$(timeout --kill-after=10 120 oci compute instance launch \
-    --compartment-id "$COMPARTMENT_ID" \
-    --availability-domain "$AVAILABILITY_DOMAIN" \
-    --display-name "$INSTANCE_NAME" \
-    --image-id "$IMAGE_ID" \
-    --shape "VM.Standard.A1.Flex" \
-    --shape-config "file://$SHAPE_CONFIG" \
-    --subnet-id "$SUBNET_ID" \
-    --assign-public-ip true \
-    --ssh-authorized-keys-file "$SSH_KEY_FILE" 2>&1)
-  rc=$?
+  # Run launch in background, capture output to temp file, kill after 120s.
+  LAUNCH_OUT=/tmp/launch_output.txt
+  > "$LAUNCH_OUT"
+  launch_oci > "$LAUNCH_OUT" 2>&1 &
+  LAUNCH_PID=$!
 
+  # Watchdog: SIGTERM after 120s, SIGKILL after 130s.
+  ( sleep 120; kill -TERM $LAUNCH_PID 2>/dev/null; sleep 10; kill -9 $LAUNCH_PID 2>/dev/null ) &
+  WATCHDOG_PID=$!
+
+  wait $LAUNCH_PID 2>/dev/null
+  rc=$?
+  kill $WATCHDOG_PID 2>/dev/null
+  wait $WATCHDOG_PID 2>/dev/null
+
+  response=$(cat "$LAUNCH_OUT")
   log "[$timestamp] Launch returned rc=$rc"
 
   if [ "$rc" -eq 0 ] && printf '%s' "$response" | grep -q '"lifecycle-state": *"\(RUNNING\|PROVISIONING\)"'; then
     log "[$timestamp] SUCCESS - ARM instance created (jaribio #$attempt)"
-    echo "$response" | head -20
+    printf '%s' "$response" | head -20
     while true; do sleep 3600; done
-  elif [ "$rc" -eq 124 ]; then
-    log "[$timestamp] TIMEOUT (>120s) - jaribio #$attempt. Retrying in 20s..."
+  elif [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+    log "[$timestamp] TIMEOUT/KILLED (rc=$rc) - jaribio #$attempt. Retrying in 20s..."
     sleep 20
   elif printf '%s' "$response" | grep -qiE 'capacity|InternalError'; then
     log "[$timestamp] Out of capacity - jaribio #$attempt. Retrying in 35s..."
