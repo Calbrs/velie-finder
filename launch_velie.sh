@@ -48,19 +48,6 @@ instance_running() {
     --raw-output 2>/dev/null | grep -q 'oci1\.instance' || return 1
 }
 
-launch_oci() {
-  oci compute instance launch \
-    --compartment-id "$COMPARTMENT_ID" \
-    --availability-domain "$AVAILABILITY_DOMAIN" \
-    --display-name "$INSTANCE_NAME" \
-    --image-id "$IMAGE_ID" \
-    --shape "VM.Standard.A1.Flex" \
-    --shape-config "file://$SHAPE_CONFIG" \
-    --subnet-id "$SUBNET_ID" \
-    --assign-public-ip true \
-    --ssh-authorized-keys-file "$SSH_KEY_FILE" 2>&1
-}
-
 attempt=0
 while true; do
   attempt=$((attempt + 1))
@@ -76,22 +63,20 @@ while true; do
 
   log "[$timestamp] Launching OCI ARM A1.Flex (${OCPUS}OC/${MEMORY_GB}GB) - jaribio #$attempt"
 
-  # Run launch in background, capture output to temp file, kill after 120s.
-  LAUNCH_OUT=/tmp/launch_output.txt
-  > "$LAUNCH_OUT"
-  launch_oci > "$LAUNCH_OUT" 2>&1 &
-  LAUNCH_PID=$!
-
-  # Watchdog: SIGTERM after 120s, SIGKILL after 130s.
-  ( sleep 120; kill -TERM $LAUNCH_PID 2>/dev/null; sleep 10; kill -9 $LAUNCH_PID 2>/dev/null ) &
-  WATCHDOG_PID=$!
-
-  wait $LAUNCH_PID 2>/dev/null
+  # --foreground: send signals to entire process group (kills oci + all Python children).
+  # --kill-after=15: SIGKILL 15s after SIGTERM if process still alive.
+  response=$(timeout --foreground --kill-after=15 120 oci compute instance launch \
+    --compartment-id "$COMPARTMENT_ID" \
+    --availability-domain "$AVAILABILITY_DOMAIN" \
+    --display-name "$INSTANCE_NAME" \
+    --image-id "$IMAGE_ID" \
+    --shape "VM.Standard.A1.Flex" \
+    --shape-config "file://$SHAPE_CONFIG" \
+    --subnet-id "$SUBNET_ID" \
+    --assign-public-ip true \
+    --ssh-authorized-keys-file "$SSH_KEY_FILE" 2>&1)
   rc=$?
-  kill $WATCHDOG_PID 2>/dev/null
-  wait $WATCHDOG_PID 2>/dev/null
 
-  response=$(cat "$LAUNCH_OUT")
   log "[$timestamp] Launch returned rc=$rc"
 
   if [ "$rc" -eq 0 ] && printf '%s' "$response" | grep -q '"lifecycle-state": *"\(RUNNING\|PROVISIONING\)"'; then
