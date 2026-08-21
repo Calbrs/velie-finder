@@ -11,6 +11,7 @@ RUN apt-get update \
 
 WORKDIR /app
 COPY launch_velie.sh /app/launch_velie.sh
+COPY launch_helper.py /app/launch_helper.py
 COPY health.py /app/health.py
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/launch_velie.sh /app/entrypoint.sh
